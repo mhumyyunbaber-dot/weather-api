@@ -21,8 +21,10 @@ class WeatherServiceConnectionError(WeatherServiceError):
 class WeatherServiceAPIError(WeatherServiceError):
     pass
 
+
 class WeatherServiceCityNotFoundError(WeatherServiceError):
     pass
+
 
 class WeatherDatabaseError(WeatherServiceError):
     pass
@@ -32,6 +34,13 @@ class WeatherService:
     logger = logging.getLogger(__name__)
 
     async def get_weather(self, city: str) -> dict:
+
+        if not isinstance(city, str):
+            raise WeatherServiceAPIError(
+                "Invalid city value."
+            )
+
+        city = city.strip()
 
         params = {
             "q": city,
@@ -77,12 +86,12 @@ class WeatherService:
             if e.response.status_code == 404:
 
                 self.logger.warning(
-                "City not found: %s",
-                city
+                    "City not found: %s",
+                    city
                 )
 
                 raise WeatherServiceCityNotFoundError(
-                "City not found."
+                    "City not found."
                 )
 
             self.logger.error(
@@ -93,8 +102,6 @@ class WeatherService:
             raise WeatherServiceAPIError(
                 "Weather service returned an error."
             )
-            
-        
 
         except httpx.RequestError:
 
@@ -114,7 +121,6 @@ class WeatherService:
             description=data["weather"][0]["description"]
         )
 
-        # Save weather data to MongoDB
         try:
 
             await weather_collection.insert_one(weather)
@@ -144,10 +150,19 @@ class WeatherService:
         limit: int = 10
     ) -> dict:
 
-        query = {}
+        query: dict = {}
 
-        if city:
-            query["city"] = city
+        if city is not None:
+
+            if not isinstance(city, str):
+                raise WeatherDatabaseError(
+                    "Invalid city filter."
+                )
+
+            city = city.strip()
+
+            if city:
+                query["city"] = city
 
         try:
 

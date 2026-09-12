@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     weather_api_key: str
     weather_api_url: str
 
+    api_key: str
+    admin_api_key: str
+    
+    allowed_origins: str
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False

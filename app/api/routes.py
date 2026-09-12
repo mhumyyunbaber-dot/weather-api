@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from app.core.security import verify_api_key
+from app.core.limiter import limiter
 from app.schemas import WeatherRequest, WeatherResponse
 from app.services.weather import (
     WeatherService,
@@ -24,12 +26,17 @@ weather_service = WeatherService()
     "/",
     response_model=WeatherResponse
 )
-async def get_weather(request: WeatherRequest):
+@limiter.limit("10/minute")
+async def get_weather(
+    request: Request,
+    weather_request: WeatherRequest,
+    _: None = Depends(verify_api_key)
+):
 
     try:
 
         weather = await weather_service.get_weather(
-            request.city
+            weather_request.city
         )
 
         return weather
@@ -78,13 +85,34 @@ async def get_weather(request: WeatherRequest):
 
 
 @router.get("/history")
+@limiter.limit("30/minute")
 async def get_weather_history(
-    city: str | None = None,
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=10, ge=1, le=100)
+    request: Request,
+    city: str | None = Query(
+        default=None,
+        min_length=2,
+        max_length=100
+    ),
+    page: int = Query(default=1, ge=1, le=10000),
+    limit: int = Query(default=10, ge=1, le=100),
+    _: None = Depends(verify_api_key)
 ):
-
     try:
+
+        if city:
+            city = city.strip()
+
+            if not city:
+                raise HTTPException(
+                    status_code=422,
+                    detail="City name cannot be empty."
+                )
+
+            if "\x00" in city:
+                raise HTTPException(
+                    status_code=422,
+                    detail="City name contains invalid characters."
+                )
 
         history = await weather_service.get_weather_history(
             city=city,
@@ -100,6 +128,9 @@ async def get_weather_history(
             status_code=500,
             detail="Unable to fetch weather history."
         )
+
+    except HTTPException:
+        raise
 
     except Exception:
 
